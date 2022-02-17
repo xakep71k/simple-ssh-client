@@ -21,7 +21,7 @@ fn main() -> std::io::Result<()> {
     let host = host.to_string() + ":22";
     let mut stream = TcpStream::connect(host)?;
 
-    let mut buf = Vec::new();
+    let mut buf = vec![0; 1024];
     let size = stream.read(&mut buf)?;
     println!("read size: {}", size);
     Ok(())
