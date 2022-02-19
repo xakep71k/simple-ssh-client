@@ -4,6 +4,9 @@ use std::net::TcpStream;
 fn main() -> std::io::Result<()> {
     pretty_env_logger::init();
 
+    /*
+     * handling command line args
+     */
     if std::env::args().len() != 2 {
         help();
         std::process::exit(1);
