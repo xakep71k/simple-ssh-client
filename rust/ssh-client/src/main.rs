@@ -7,6 +7,7 @@ fn main() {
     match SSHOptions::from_cli() {
         Err(err) => {
             log::error!("{}", err);
+            help();
             std::process::exit(1);
         }
         Ok(opts) => {
@@ -27,8 +28,7 @@ struct SSHOptions {
 impl SSHOptions {
     fn from_cli() -> Result<SSHOptions, Box<dyn std::error::Error>> {
         if std::env::args().len() != 2 {
-            help();
-            std::process::exit(1);
+            return Err("wrong arguments".into());
         }
 
         let destination = std::env::args().last().unwrap();
