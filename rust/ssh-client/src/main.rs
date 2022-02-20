@@ -1,44 +1,69 @@
 use std::io::prelude::*;
 use std::net::TcpStream;
 
-fn main() -> std::io::Result<()> {
+fn main() {
     pretty_env_logger::init();
 
-    /*
-     * handling command line args
-     */
-    if std::env::args().len() != 2 {
-        help();
-        std::process::exit(1);
+    match SSHOptions::from_cli() {
+        Err(err) => {
+            log::error!("{}", err);
+            std::process::exit(1);
+        }
+        Ok(opts) => {
+            if let Err(err) = ssh(opts) {
+                log::error!("{}", err);
+            }
+        }
     }
 
-    let destination = std::env::args().last().unwrap();
-    let mut destination = destination.split('@');
+    std::process::exit(0);
+}
 
-    let login = destination.next().unwrap_or_default();
-    let host = destination.next().unwrap_or_default();
+struct SSHOptions {
+    login: String,
+    host: String,
+}
 
-    if login.is_empty() || host.is_empty() {
-        help();
-        std::process::exit(1);
+impl SSHOptions {
+    fn from_cli() -> Result<SSHOptions, Box<dyn std::error::Error>> {
+        if std::env::args().len() != 2 {
+            help();
+            std::process::exit(1);
+        }
+
+        let destination = std::env::args().last().unwrap();
+        let mut destination = destination.split('@');
+
+        let login = destination.next().unwrap_or_default().to_string();
+        let host = destination.next().unwrap_or_default().to_string();
+
+        if login.is_empty() {
+            return Err("login not specified".into());
+        }
+
+        if host.is_empty() {
+            return Err("host not specified".into());
+        }
+
+        let host = host + ":22";
+        Ok(SSHOptions { login, host })
     }
+}
 
-    let host = host.to_string() + ":22";
-    log::info!("connecting to host {}", host);
-    let mut stream = TcpStream::connect(host)?;
+fn ssh(opts: SSHOptions) -> Result<(), Box<dyn std::error::Error>> {
+    log::info!("connecting to  {}@{}", opts.login, opts.host);
+    let mut stream = TcpStream::connect(opts.host)?;
 
     /*
      * receiving server banner
      */
     let mut buf = vec![0; 1024];
     let size = stream.read(&mut buf)?;
-    match std::str::from_utf8(&buf[..size]) {
-        Ok(s) => {
-            log::info!("server banner: {}", s.trim());
-        }
-        Err(err) => {
-            log::error!("failed to convert to utf8: {}", err);
-        }
+    let banner = std::str::from_utf8(&buf[..size])?;
+    log::info!("server banner: {}", banner.trim());
+
+    if !banner.starts_with("SSH-2.0") {
+        return Err(format!("SSH version not supported: '{}'", banner).into());
     }
 
     /*
@@ -47,10 +72,9 @@ fn main() -> std::io::Result<()> {
 
     let banner = "SSH-2.0-xakep71k simple ssh\r\n";
     if let Err(err) = stream.write(banner.as_bytes()) {
-        log::error!("failed to send banner: {}", err);
-    } else {
-        log::info!("client banner sent successfully: '{}'", banner.trim());
+        return Err(format!("failed to send banner: {}", err).into());
     }
+    log::info!("client banner sent successfully: '{}'", banner.trim());
 
     /*
      * handling key exchange init package
